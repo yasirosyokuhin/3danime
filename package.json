@@ -1,0 +1,23 @@
+{
+  "name": "sakura-crossing",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An explorable Japanese suburban railway-crossing street rendered 3D-to-2D in a cel-shaded anime style.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "play": "vite build && vite preview --port 5179 --open"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
