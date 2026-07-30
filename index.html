@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Sakura Crossing — 桜踏切</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
@@ -11,8 +11,22 @@
     background: #e6ecf7;
     font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Segoe UI', system-ui, sans-serif;
     color: #3a3350;
+    overscroll-behavior: none;
   }
-  #view { display: block; width: 100vw; height: 100vh; }
+  /* A phone has no keyboard/mouse to swallow scroll or long-press gestures,
+   * so both have to be switched off by hand -- otherwise a drag-to-look
+   * scrolls the page and a held finger opens a text-selection menu. */
+  body.touch-mode {
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body.touch-mode input,
+  body.touch-mode input::-webkit-slider-thumb {
+    touch-action: pan-x;
+    -webkit-user-select: auto; user-select: auto;
+  }
+  #view { display: block; width: 100vw; height: 100vh; touch-action: none; }
 
   .hud { position: fixed; inset: 0; pointer-events: none; }
 
@@ -66,6 +80,8 @@
   }
   .hint b { color: #3a3350; }
   .hint.faded { opacity: 0; }
+  /* clear of the joystick's touch zone at the bottom-left */
+  body.touch-mode .hint { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); max-width: 50vw; }
 
   /* ---------- coordinate readout (C) ---------- */
   .coords {
@@ -84,6 +100,77 @@
   .coords .k { color: #8f88a8; margin-right: .12em; }
   .coords .d { color: #8f88a8; }
   .coords .s { color: #5d6f96; font-size: 11px; }
+
+  /* ---------- touch controls ---------- */
+  .touch-ui { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
+  .touch-ui.hidden { display: none; }
+
+  /* invisible hit regions -- the joystick and the drag-look each own half
+   * the screen, tracked by pointer id so a thumb on one side and a finger
+   * on the other never steal each other's input */
+  .tjoy-zone, .tlook-zone {
+    position: absolute; top: 0; bottom: 0;
+    pointer-events: auto; touch-action: none;
+  }
+  .tjoy-zone { left: 0; width: 45%; }
+  .tlook-zone { left: 45%; right: 0; }
+
+  .tjoy-base {
+    position: fixed;
+    width: 96px; height: 96px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: rgba(58,51,80,.16);
+    border: 2px solid rgba(255,255,255,.55);
+    opacity: 0; transition: opacity .12s ease;
+    pointer-events: none;
+  }
+  .tjoy-base.on { opacity: 1; }
+  .tjoy-stick {
+    position: absolute; left: 50%; top: 50%;
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.85);
+    border: 2px solid rgba(58,51,80,.55);
+    transform: translate(-50%, -50%);
+  }
+
+  .tbtn {
+    position: absolute;
+    pointer-events: auto; touch-action: none;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 2px solid rgba(58,51,80,.5);
+    background: rgba(252,250,252,.76);
+    color: #3a3350;
+    font-size: 20px; font-weight: 700;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 2px 6px rgba(58,51,80,.22);
+  }
+  .tbtn:active { background: rgba(207,92,98,.6); transform: scale(.9); }
+
+  .tbtn-interact {
+    right: 22px; bottom: calc(114px + env(safe-area-inset-bottom, 0px));
+    width: 68px; height: 68px; font-size: 22px;
+  }
+  .tbtn-ebike {
+    right: 102px; bottom: calc(114px + env(safe-area-inset-bottom, 0px));
+    width: 54px; height: 54px; font-size: 24px;
+  }
+  .tbtn-planet {
+    right: 22px; bottom: calc(198px + env(safe-area-inset-bottom, 0px));
+    width: 54px; height: 54px; font-size: 20px;
+  }
+  .tbtn-music {
+    right: 102px; bottom: calc(198px + env(safe-area-inset-bottom, 0px));
+    width: 54px; height: 54px; font-size: 20px;
+  }
+  .tbtn-pause {
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    width: 42px; height: 42px; font-size: 16px;
+  }
 
   /* ---------- title / pause screen ---------- */
   .overlay {

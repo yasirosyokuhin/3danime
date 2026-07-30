@@ -77,6 +77,11 @@ export class Player {
     /* Riding state.  `ride` is whatever was handed to `mount()` -- the walker
      * never looks inside it, it only asks whether it is there. */
     this.ride = null;
+
+    /* Touch input, set by `setMoveVector`/`look` from `core/touch.js`.  Kept
+     * separate from `keys` because it is analog: a joystick reports how far
+     * it was pushed, a key does not. */
+    this._touchMove = { x: 0, y: 0 };
     this.roll = 0;        // camera bank, driven by the turn rate
     this.yawRate = 0;     // smoothed: the mouse delivers yaw in spikes
     this._prevYaw = this.yaw;
@@ -106,12 +111,7 @@ export class Player {
   }
 
   _bind() {
-    const onMove = (e) => {
-      if (!this.locked) return;
-      this.yaw -= e.movementX * this.sensitivity;
-      this.pitch -= e.movementY * this.sensitivity;
-      this.pitch = clamp(this.pitch, -1.15, 1.05);
-    };
+    const onMove = (e) => this.look(e.movementX, e.movementY);
     document.addEventListener('mousemove', onMove);
 
     document.addEventListener('pointerlockchange', () => {
@@ -134,6 +134,46 @@ export class Player {
 
   lock() {
     this.dom.requestPointerLock?.();
+  }
+
+  /**
+   * Touch devices have no pointer to lock, so `core/touch.js` drives this
+   * pair directly instead of going through `pointerlockchange` -- same
+   * effect (gates input, opens/closes the overlay via `onLockChange`),
+   * different trigger.
+   */
+  lockVirtual() {
+    if (this.locked) return;
+    this.locked = true;
+    this.onLockChange?.(true);
+  }
+
+  unlockVirtual() {
+    if (!this.locked) return;
+    this.locked = false;
+    this.keys.clear();
+    this._touchMove.x = 0;
+    this._touchMove.y = 0;
+    this.onLockChange?.(false);
+  }
+
+  /** Mouse-look and touch-drag both funnel through here. */
+  look(dx, dy) {
+    if (!this.locked) return;
+    this.yaw -= dx * this.sensitivity;
+    this.pitch -= dy * this.sensitivity;
+    this.pitch = clamp(this.pitch, -1.15, 1.05);
+  }
+
+  /** A joystick's offset from its centre, both axes in [-1, 1]. */
+  setMoveVector(x, y) {
+    this._touchMove.x = clamp(x, -1, 1);
+    this._touchMove.y = clamp(y, -1, 1);
+  }
+
+  /** The on-screen equivalent of the `E` key. */
+  interact() {
+    if (this.locked) this.onInteract?.(this.hovered);
   }
 
   reset() {
@@ -190,7 +230,10 @@ export class Player {
   update(dt) {
     const k = this.keys;
     const riding = this.ride !== null;
-    const sprint = k.has('ShiftLeft') || k.has('ShiftRight');
+    const touch = this._touchMove;
+    // how far the stick is pushed, 0..1 -- the analog throttle a key can't give
+    const touchMag = Math.min(1, Math.hypot(touch.x, touch.y));
+    const sprint = k.has('ShiftLeft') || k.has('ShiftRight') || touchMag > 0.62;
     const speed = riding ? this.rideSpeed : (sprint ? this.runSpeed : this.walkSpeed);
 
     let fwd = 0, side = 0;
@@ -199,6 +242,8 @@ export class Player {
       if (k.has('KeyS') || k.has('ArrowDown')) fwd -= 1;
       if (k.has('KeyD') || k.has('ArrowRight')) side += 1;
       if (k.has('KeyA') || k.has('ArrowLeft')) side -= 1;
+      fwd += touch.y;
+      side += touch.x;
     }
 
     /* On the machine A and D steer rather than strafe.  A scooter that slides
@@ -219,7 +264,11 @@ export class Player {
       this._wish
         .copy(this._forward).multiplyScalar(fwd)
         .addScaledVector(this._right, side);
-      if (this._wish.lengthSq() > 1e-6) this._wish.normalize().multiplyScalar(speed);
+      // a joystick is analog -- half-deflected is half speed. A key is not,
+      // so this leaves keyboard movement exactly as it was (touchMag stays 0).
+      if (this._wish.lengthSq() > 1e-6) {
+        this._wish.normalize().multiplyScalar(speed * (touchMag > 0.02 ? touchMag : 1));
+      }
     }
 
     /* Critically-damped approach to the wish velocity: responsive but never

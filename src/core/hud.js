@@ -4,7 +4,7 @@
  * the point.
  * ------------------------------------------------------------------ */
 
-export function createHud({ volume = 0.34 } = {}) {
+export function createHud({ volume = 0.34, touch = false } = {}) {
   const el = (tag, cls, parent, html) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -18,12 +18,16 @@ export function createHud({ volume = 0.34 } = {}) {
   const crosshair = el('div', 'crosshair', root);
   const prompt = el('div', 'prompt', root, '');
   const toast = el('div', 'toast', root, '');
-  const hint = el('div', 'hint', root,
-    `<b>WASD</b> walk &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse</b> look
-     &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>V</b> e-bike
-     &nbsp;·&nbsp; <b>P</b> see the planet &nbsp;·&nbsp; <b>M</b> music
-     &nbsp;·&nbsp; <b>C</b> coordinates &nbsp;·&nbsp; <b>R</b> opening view
-     &nbsp;·&nbsp; <b>Esc</b> release`);
+  const hint = el('div', 'hint', root, touch
+    ? `<b>Stick</b> walk &nbsp;·&nbsp; <b>Drag</b> look
+       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>\u{1F6B2}</b> e-bike
+       &nbsp;·&nbsp; <b>\u{1F30F}</b> see the planet &nbsp;·&nbsp; <b>♪</b> music
+       &nbsp;·&nbsp; <b>⏸</b> pause`
+    : `<b>WASD</b> walk &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse</b> look
+       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>V</b> e-bike
+       &nbsp;·&nbsp; <b>P</b> see the planet &nbsp;·&nbsp; <b>M</b> music
+       &nbsp;·&nbsp; <b>C</b> coordinates &nbsp;·&nbsp; <b>R</b> opening view
+       &nbsp;·&nbsp; <b>Esc</b> release`);
 
   /* Coordinate readout, off by default and toggled with C.
    *
@@ -66,14 +70,20 @@ export function createHud({ volume = 0.34 } = {}) {
           The scene is waiting where you left it. Adjust the music volume,
           then continue your walk when you're ready.
         </p>
-        <div class="control-strip">
+        <div class="control-strip">${touch ? `
+          <span><b>Stick</b> Move</span>
+          <span><b>Drag</b> Look</span>
+          <span><b>E</b> Interact</span>
+          <span><b>\u{1F6B2}</b> E-Bike</span>
+          <span><b>\u{1F30F}</b> Planet</span>
+          <span><b>♪</b> Music</span>` : `
           <span><b>WASD</b> Move</span>
           <span><b>Mouse</b> Look</span>
           <span><b>E</b> Interact</span>
           <span><b>Shift</b> Run</span>
           <span><b>V</b> E-Bike</span>
           <span><b>M</b> Music</span>
-          <span><b>C</b> Coordinates</span>
+          <span><b>C</b> Coordinates</span>`}
         </div>
         <label class="audio-control pause-only pause-stack">
           <span class="audio-head">
@@ -90,8 +100,8 @@ export function createHud({ volume = 0.34 } = {}) {
         </button>
         <div class="menu-foot">
           <span>3D scene · 2D animation spirit</span>
-          <span class="start-only">CLICK TO BEGIN</span>
-          <span class="pause-only">ESC TO PAUSE</span>
+          <span class="start-only">${touch ? 'TAP TO BEGIN' : 'CLICK TO BEGIN'}</span>
+          <span class="pause-only">${touch ? 'TAP ⏸ TO PAUSE' : 'ESC TO PAUSE'}</span>
         </div>
       </div>
     </section>`;

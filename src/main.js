@@ -9,6 +9,7 @@ import { createHud } from './core/hud.js';
 import { createMusic } from './core/audio.js';
 import { buildWorld } from './world/index.js';
 import { createEbike } from './world/ebike.js';
+import { isTouchDevice, createTouchControls } from './core/touch.js';
 
 /* ------------------------------------------------------------------ *
  * Sakura Crossing -- entry point.
@@ -21,6 +22,8 @@ import { createEbike } from './world/ebike.js';
  * ------------------------------------------------------------------ */
 
 const canvas = document.getElementById('view');
+const touchMode = isTouchDevice();
+if (touchMode) document.body.classList.add('touch-mode');
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -89,7 +92,7 @@ try {
   }
 } catch { /* storage is optional; the game works without it */ }
 
-const hud = createHud({ volume: initialVolume });
+const hud = createHud({ volume: initialVolume, touch: touchMode });
 const music = createMusic({ volume: initialVolume, fadeIn: 3.0 });
 hud.setMuted(music.muted);
 const rememberVolume = () => {
@@ -102,16 +105,20 @@ hud.onVolumeChange = (value) => {
 };
 
 // Autoplay needs a user gesture, so the music starts on the same click that
-// takes the pointer lock rather than on load.
+// takes the pointer lock rather than on load.  Touch has no pointer to lock,
+// so it drives `player.locked` directly instead -- see `lockVirtual`.
 hud.onStart = () => {
   music.start();
-  player.lock();
+  if (touchMode) player.lockVirtual();
+  else player.lock();
 };
 player.onLockChange = (locked) => hud.setLocked(locked);
-canvas.addEventListener('click', () => {
-  music.start();
-  if (!player.locked) player.lock();
-});
+if (!touchMode) {
+  canvas.addEventListener('click', () => {
+    music.start();
+    if (!player.locked) player.lock();
+  });
+}
 
 /* The one machine you can ride.  Built here rather than in `buildWorld`
  * because it is placed *after* the planet bake -- see the note in the file. */
@@ -126,15 +133,33 @@ player.onInteract = (target) => {
 /* ------------------------------- pipeline ------------------------------- */
 const pipeline = new Pipeline(renderer, scene, camera);
 
+/* 46 deg is authored against a landscape frame. Held fixed as the *vertical*
+ * fov, a portrait window turns it into a narrow vertical slot instead -- the
+ * horizontal fov shrinks with the aspect ratio, and a phone held upright is
+ * about a quarter as wide as tall. Below the authored aspect, grow the
+ * vertical fov instead so the horizontal one stays roughly what it was
+ * landscape; clamped, because the alternative at extreme aspects is a
+ * fisheye rather than a claustrophobic tunnel, and the fisheye is the lesser
+ * of the two. */
+const BASE_VFOV = 46;
+const BASE_ASPECT = 16 / 9;
+const BASE_HALF_HFOV = Math.atan(Math.tan((BASE_VFOV * Math.PI) / 360) * BASE_ASPECT);
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  camera.aspect = w / h;
+  const aspect = w / h;
+  camera.aspect = aspect;
+  camera.fov = aspect >= BASE_ASPECT
+    ? BASE_VFOV
+    : Math.min(92, (2 * Math.atan(Math.tan(BASE_HALF_HFOV) / aspect) * 180) / Math.PI);
   camera.updateProjectionMatrix();
   pipeline.setSize(w, h);
   setOutlineResolution(pipeline.size.x, pipeline.size.y);
 }
 window.addEventListener('resize', resize);
+// iOS reports the old innerHeight for a frame or two after a rotation
+window.addEventListener('orientationchange', () => setTimeout(resize, 60));
 resize();
 
 /* --------------------------------- loop --------------------------------- */
@@ -176,33 +201,55 @@ function setPlanetView(on) {
   hud.setPlanetView(on);
 }
 
+function toggleMusic() {
+  const off = music.toggle();
+  hud.setMuted(off);
+  hud.setVolume(music.volume);
+  rememberVolume();
+  if (music.available) hud.flash(off ? '♪  music off' : '♪  music on');
+}
+
+/* V summons the e-bike.  The orbit view moved to P to make room for it --
+ * it is a thing you look at once, and this is a thing you use. */
+function toggleEbikeOrReturn() {
+  if (planetView) {
+    setPlanetView(false);
+    hud.flash('back on the ground');
+  } else {
+    ebike.toggle();
+  }
+}
+
+function togglePlanetView() {
+  setPlanetView(!planetView);
+  const back = touchMode ? 'tap \u{1F30F} to return' : 'P to return';
+  hud.flash(planetView ? `orbit view  ·  ${back}` : 'back on the ground');
+}
+
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
-  if (e.code === 'KeyM') {
-    const off = music.toggle();
-    hud.setMuted(off);
-    hud.setVolume(music.volume);
-    rememberVolume();
-    if (music.available) hud.flash(off ? '♪  music off' : '♪  music on');
-  }
-  /* V summons the e-bike.  The orbit view moved to P to make room for it --
-   * it is a thing you look at once, and this is a thing you use. */
-  if (e.code === 'KeyV') {
-    if (planetView) {
-      setPlanetView(false);
-      hud.flash('back on the ground');
-    } else {
-      ebike.toggle();
-    }
-  }
-  if (e.code === 'KeyP') {
-    setPlanetView(!planetView);
-    hud.flash(planetView ? 'orbit view  ·  P to return' : 'back on the ground');
-  }
+  if (e.code === 'KeyM') toggleMusic();
+  if (e.code === 'KeyV') toggleEbikeOrReturn();
+  if (e.code === 'KeyP') togglePlanetView();
   // two quiet toggles, handy for seeing what the ink and grade passes do
   if (e.code === 'KeyO') pipeline.enabled.ink = !pipeline.enabled.ink;
   if (e.code === 'KeyG') pipeline.enabled.grade = !pipeline.enabled.grade;
 });
+
+if (touchMode) {
+  const touchControls = createTouchControls({
+    player,
+    onInteract: () => player.interact(),
+    onEbike: toggleEbikeOrReturn,
+    onMusic: toggleMusic,
+    onPlanet: togglePlanetView,
+    onPause: () => player.unlockVirtual(),
+  });
+  player.onLockChange = (locked) => {
+    hud.setLocked(locked);
+    touchControls.setActive(locked);
+  };
+}
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 20);
