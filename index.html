@@ -67,6 +67,13 @@
     opacity: 0; transition: opacity .25s ease, transform .25s ease;
   }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  /* The objective panel is top-left and, on a phone, pushed down clear of the
+   * pause and errand buttons -- which puts its bottom edge at about 132 px,
+   * squarely under a toast sitting at 12 % of an 860 px screen.  Every arrival
+   * message in an errand landed on top of the panel telling you where to go
+   * next.  Nothing is wrong with either element on its own, which is why it
+   * only showed up in a portrait frame. */
+  body.touch-mode .toast { top: calc(146px + env(safe-area-inset-top, 0px)); }
 
   /* ---------- hint line ---------- */
   .hint {
@@ -670,7 +677,7 @@
     .overlay, .menu-action { transition: none; }
   }
 </style>
-  <script type="module" crossorigin src="./assets/index-CTkavQrO.js"></script>
+  <script type="module" crossorigin src="./assets/index-Cygm_DUV.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
