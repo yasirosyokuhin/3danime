@@ -20,11 +20,12 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
   const toast = el('div', 'toast', root, '');
   const hint = el('div', 'hint', root, touch
     ? `<b>Stick</b> walk &nbsp;·&nbsp; <b>Drag</b> look
-       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>\u{1F6B2}</b> e-bike
-       &nbsp;·&nbsp; <b>\u{1F30F}</b> see the planet &nbsp;·&nbsp; <b>♪</b> music
-       &nbsp;·&nbsp; <b>⏸</b> pause`
+       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>\u{1F4CB}</b> おつかい
+       &nbsp;·&nbsp; <b>\u{1F6B2}</b> e-bike &nbsp;·&nbsp; <b>\u{1F30F}</b> planet
+       &nbsp;·&nbsp; <b>♪</b> music &nbsp;·&nbsp; <b>⏸</b> pause`
     : `<b>WASD</b> walk &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse</b> look
-       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>V</b> e-bike
+       &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>Q</b> おつかい
+       &nbsp;·&nbsp; <b>V</b> e-bike
        &nbsp;·&nbsp; <b>P</b> see the planet &nbsp;·&nbsp; <b>M</b> music
        &nbsp;·&nbsp; <b>C</b> coordinates &nbsp;·&nbsp; <b>R</b> opening view
        &nbsp;·&nbsp; <b>Esc</b> release`);
@@ -38,6 +39,53 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
    * quoted straight into a camera call or a bug report. */
   const coords = el('div', 'coords', root, '');
   let lastLine = '';
+
+  /* ---------- おつかい: the objective panel and the result card ----------
+   *
+   * The panel is the only navigation this world has -- the beacon confirms a
+   * stop, but it is depth-tested and 9 m tall, so behind a row of houses the
+   * arrow and the distance are all there is.  Both live here rather than in
+   * `mission.js` because the HUD owns every node under `.hud`. */
+  const mission = el('div', 'mission', root, `
+    <div class="m-head">
+      <span class="m-count"></span>
+      <span class="m-timer"></span>
+    </div>
+    <div class="m-body">
+      <div class="m-arrow"><i></i></div>
+      <div class="m-text">
+        <div class="m-name"></div>
+        <div class="m-sub"></div>
+      </div>
+      <div class="m-dist"></div>
+    </div>`);
+  const mCount = mission.querySelector('.m-count');
+  const mTimer = mission.querySelector('.m-timer');
+  const mArrow = mission.querySelector('.m-arrow i');
+  const mName = mission.querySelector('.m-name');
+  const mSub = mission.querySelector('.m-sub');
+  const mDist = mission.querySelector('.m-dist');
+
+  const result = el('div', 'result hidden', root, `
+    <div class="result-card">
+      <div class="r-kicker">おつかい</div>
+      <div class="r-rank"></div>
+      <div class="r-title"></div>
+      <div class="r-rows"></div>
+      <div class="r-actions">
+        <button class="r-btn r-again" type="button">もう一度</button>
+        <button class="r-btn r-close" type="button">まちを歩く</button>
+      </div>
+    </div>`);
+  const rRank = result.querySelector('.r-rank');
+  const rTitle = result.querySelector('.r-title');
+  const rRows = result.querySelector('.r-rows');
+
+  /** mm:ss -- a bare seconds count is unreadable as a countdown. */
+  const mmss = (s) => {
+    const t = Math.max(0, Math.round(s));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  };
 
   const overlay = el('div', 'overlay', root);
   overlay.dataset.mode = 'start';
@@ -74,16 +122,16 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
           <span><b>Stick</b> Move</span>
           <span><b>Drag</b> Look</span>
           <span><b>E</b> Interact</span>
+          <span><b>\u{1F4CB}</b> おつかい</span>
           <span><b>\u{1F6B2}</b> E-Bike</span>
-          <span><b>\u{1F30F}</b> Planet</span>
-          <span><b>♪</b> Music</span>` : `
+          <span><b>\u{1F30F}</b> Planet</span>` : `
           <span><b>WASD</b> Move</span>
           <span><b>Mouse</b> Look</span>
           <span><b>E</b> Interact</span>
           <span><b>Shift</b> Run</span>
+          <span><b>Q</b> おつかい</span>
           <span><b>V</b> E-Bike</span>
-          <span><b>M</b> Music</span>
-          <span><b>C</b> Coordinates</span>`}
+          <span><b>M</b> Music</span>`}
         </div>
         <label class="audio-control pause-only pause-stack">
           <span class="audio-head">
@@ -126,6 +174,11 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
   let coordsOn = false;
   let coordsAcc = 0;
   let startedOnce = false;
+  /* The result card releases the pointer so its buttons can be clicked, and
+   * releasing the pointer is also what raises the pause card -- so without
+   * this the two stack, and the one underneath is the one explaining how to
+   * resume. The result owns the screen while it is up. */
+  let resultOpen = false;
 
   const api = {
     root,
@@ -150,17 +203,58 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
     setPlanetView(on) {
       crosshair.classList.toggle('hidden', on);
     },
+    onResultShown: null,
+    onResultAction: null,
+    /**
+     * The live objective, or `null` to clear it.
+     *
+     * `bearing` arrives in the player's frame with yaw growing to the *left*,
+     * and a CSS rotation grows to the right, so it is negated here -- the one
+     * sign in this file, kept next to the thing it applies to.
+     */
+    setMission(m) {
+      if (!m) {
+        mission.classList.remove('on');
+        return;
+      }
+      mission.classList.add('on');
+      mCount.textContent = `${m.index + 1} / ${m.total}`;
+      mTimer.textContent = mmss(m.left);
+      mTimer.classList.toggle('urgent', Boolean(m.urgent));
+      mName.textContent = m.name;
+      mSub.textContent = m.sub;
+      mDist.innerHTML = `${Math.round(m.dist)}<small>m</small>`;
+      mArrow.style.transform = `rotate(${-m.bearing}rad)`;
+    },
+    showResult({ outcome, elapsed, par, stops, rank }) {
+      const ok = outcome === 'done';
+      rRank.textContent = ok ? rank : '—';
+      rRank.className = 'r-rank' + (ok ? ' rank-' + rank : ' rank-fail');
+      rTitle.textContent = ok ? 'かんりょう' : '時間切れ';
+      rRows.innerHTML =
+        `<div><span>タイム</span><b>${mmss(elapsed)}</b></div>`
+        + `<div><span>目安</span><b>${mmss(par)}</b></div>`
+        + `<div><span>まわった数</span><b>${ok ? stops : '—'} / ${stops}</b></div>`;
+      resultOpen = true;
+      result.classList.remove('hidden');
+      api.onResultShown?.();
+    },
+    hideResult() {
+      resultOpen = false;
+      result.classList.add('hidden');
+    },
     setLocked(locked) {
       if (locked) startedOnce = true;
+      const showOverlay = !locked && !resultOpen;
       overlay.dataset.mode = startedOnce ? 'paused' : 'start';
-      overlay.classList.toggle('hidden', locked);
-      overlay.setAttribute('aria-hidden', locked ? 'true' : 'false');
+      overlay.classList.toggle('hidden', !showOverlay);
+      overlay.setAttribute('aria-hidden', showOverlay ? 'false' : 'true');
       crosshair.classList.toggle('on', locked);
       if (locked) {
         hintTimer = 0;
         hintVisible = true;
         hint.classList.remove('faded');
-      } else {
+      } else if (showOverlay) {
         requestAnimationFrame(() => actionButton.focus({ preventScroll: true }));
       }
     },
@@ -259,6 +353,13 @@ export function createHud({ volume = 0.34, touch = false } = {}) {
     e.stopPropagation();
     api.onStart?.();
   });
+  for (const [cls, action] of [['.r-again', 'again'], ['.r-close', 'close']]) {
+    result.querySelector(cls).addEventListener('click', (e) => {
+      e.stopPropagation();
+      api.hideResult();
+      api.onResultAction?.(action);
+    });
+  }
   overlay.addEventListener('click', (e) => {
     if (e.target.closest('.audio-control')) return;
     api.onStart?.();

@@ -10,6 +10,8 @@ import { createMusic } from './core/audio.js';
 import { buildWorld } from './world/index.js';
 import { createEbike } from './world/ebike.js';
 import { isTouchDevice, createTouchControls } from './core/touch.js';
+import { createBeacon } from './world/beacon.js';
+import { createMissions } from './core/mission.js';
 
 /* ------------------------------------------------------------------ *
  * Sakura Crossing -- entry point.
@@ -130,6 +132,24 @@ player.onInteract = (target) => {
   if (target) target.action?.();
 };
 
+/* おつかい -- the errand run.  The beacon is built after the bake for the same
+ * reason the e-bike is; see the header of `world/beacon.js`. */
+const beacon = createBeacon({ scene, world });
+const missions = createMissions({ world, player, hud, beacon });
+
+/* The result card has buttons, so the pointer has to come back to click them.
+ * On touch there is no lock to release and `unlockVirtual` is the pause. */
+hud.onResultShown = () => {
+  if (touchMode) player.unlockVirtual();
+  else document.exitPointerLock?.();
+};
+hud.onResultAction = (action) => {
+  if (action === 'again') missions.start();
+  // either way the player goes back to walking
+  if (touchMode) player.lockVirtual();
+  else player.lock();
+};
+
 /* ------------------------------- pipeline ------------------------------- */
 const pipeline = new Pipeline(renderer, scene, camera);
 
@@ -231,6 +251,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') toggleMusic();
   if (e.code === 'KeyV') toggleEbikeOrReturn();
   if (e.code === 'KeyP') togglePlanetView();
+  if (e.code === 'KeyQ') missions.toggle();
   // two quiet toggles, handy for seeing what the ink and grade passes do
   if (e.code === 'KeyO') pipeline.enabled.ink = !pipeline.enabled.ink;
   if (e.code === 'KeyG') pipeline.enabled.grade = !pipeline.enabled.grade;
@@ -243,6 +264,7 @@ if (touchMode) {
     onEbike: toggleEbikeOrReturn,
     onMusic: toggleMusic,
     onPlanet: togglePlanetView,
+    onErrand: () => missions.toggle(),
     onPause: () => player.unlockVirtual(),
   });
   player.onLockChange = (locked) => {
@@ -289,6 +311,9 @@ function frame() {
   sky.dome.position.copy(camera.position);
   sky.clouds.position.copy(camera.position);
 
+  // the arrow is meaningless from orbit, so the errand holds there too
+  missions.update(dt, player.locked && !planetView);
+
   const hovered = !planetView && player.locked ? player.pick(world.interactables) : null;
   hud.setPrompt(hovered ? `E  ·  ${hovered.label.replace(/^.*?·\s*/, '')}` : '');
   hud.update(dt, player.locked);
@@ -301,7 +326,7 @@ function frame() {
 frame();
 
 // expose a little for tuning from the console
-window.__scene = { scene, camera, renderer, pipeline, world, player, ebike, music, hud, sun, fill, bounce, hemi, THREE };
+window.__scene = { scene, camera, renderer, pipeline, world, player, ebike, missions, beacon, music, hud, sun, fill, bounce, hemi, THREE };
 window.__setOutlineRes = setOutlineResolution;
 
 if (import.meta.env?.DEV) {

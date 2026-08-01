@@ -25,7 +25,7 @@ export function isTouchDevice() {
 const JOY_RADIUS = 46;
 const LOOK_SENSITIVITY = 2.6;
 
-export function createTouchControls({ player, onInteract, onEbike, onMusic, onPlanet, onPause }) {
+export function createTouchControls({ player, onInteract, onEbike, onMusic, onPlanet, onPause, onErrand }) {
   const el = (tag, cls, parent) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -112,10 +112,11 @@ export function createTouchControls({ player, onInteract, onEbike, onMusic, onPl
   };
 
   btn('tbtn-interact', 'E', onInteract);
-  btn('tbtn-ebike', '\u{1F6B2}', onEbike);   // bicycle
-  btn('tbtn-planet', '\u{1F30F}', onPlanet); // globe
-  btn('tbtn-music', '♪', onMusic);      // eighth note
-  btn('tbtn-pause', '⏸', onPause);      // pause
+  btn('tbtn-ebike', '\u{1F6B2}', onEbike);    // bicycle
+  btn('tbtn-planet', '\u{1F30F}', onPlanet);  // globe
+  btn('tbtn-music', '♪', onMusic);       // eighth note
+  btn('tbtn-errand', '\u{1F4CB}', onErrand);  // clipboard -- start/stop an errand
+  btn('tbtn-pause', '⏸', onPause);       // pause
 
   return {
     root,
