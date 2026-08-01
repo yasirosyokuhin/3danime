@@ -101,6 +101,124 @@
   .coords .d { color: #8f88a8; }
   .coords .s { color: #5d6f96; font-size: 11px; }
 
+  /* ---------- おつかい: objective panel ---------- */
+  .mission {
+    position: absolute; left: 16px; top: 14px;
+    min-width: 232px; max-width: 300px;
+    padding: 9px 12px 10px;
+    border-radius: 10px;
+    background: rgba(252,250,252,.82);
+    border: 1.5px solid rgba(58,51,80,.28);
+    box-shadow: 0 3px 12px rgba(58,51,80,.16);
+    opacity: 0; visibility: hidden;
+    transform: translateY(-6px);
+    transition: opacity .25s ease, visibility .25s ease, transform .25s ease;
+  }
+  .mission.on { opacity: 1; visibility: visible; transform: translateY(0); }
+  .m-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 7px;
+    font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: .14em;
+    color: #857c96;
+  }
+  .m-timer { color: #4c4568; }
+  .m-timer.urgent { color: #cf5c62; }
+  .m-body { display: flex; align-items: center; gap: 10px; }
+  .m-arrow {
+    flex: none;
+    display: grid; place-items: center;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: rgba(232,114,79,.15);
+    border: 1.5px solid rgba(232,114,79,.55);
+  }
+  /* a triangle pointing up; `mission.js` hands over the rotation */
+  .m-arrow i {
+    display: block; width: 0; height: 0;
+    border-left: 6.5px solid transparent;
+    border-right: 6.5px solid transparent;
+    border-bottom: 11px solid #d9633f;
+    transition: transform .08s linear;
+  }
+  .m-text { flex: 1 1 auto; min-width: 0; }
+  .m-name {
+    font-size: 13px; font-weight: 800; color: #3a3350;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .m-sub {
+    font-size: 10px; letter-spacing: .04em; color: #857c96;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .m-dist {
+    flex: none;
+    font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    font-size: 17px; font-weight: 700; color: #4c4568;
+  }
+  .m-dist small { font-size: 10px; color: #857c96; margin-left: 1px; }
+
+  /* ---------- おつかい: result card ---------- */
+  .result {
+    position: absolute; inset: 0; z-index: 8;
+    display: grid; place-items: center;
+    pointer-events: auto;
+    background: rgba(58,51,80,.30);
+    backdrop-filter: blur(5px);
+  }
+  .result.hidden { display: none; }
+  .result-card {
+    width: min(330px, calc(100vw - 40px));
+    padding: 24px 26px 20px;
+    text-align: center;
+    background: #fbf5ea;
+    border: 2px solid #3a334e;
+    border-radius: 5px;
+    box-shadow: 8px 9px 0 rgba(58,51,78,.24);
+  }
+  .r-kicker {
+    font-size: 10px; font-weight: 800; letter-spacing: .24em;
+    text-transform: uppercase; color: #857c96;
+  }
+  .r-rank {
+    margin: 4px 0 2px;
+    font-size: 62px; line-height: 1; font-weight: 850;
+    letter-spacing: -.03em;
+    -webkit-text-stroke: 1.5px #3a334e;
+  }
+  .rank-S { color: #e0a43c; }
+  .rank-A { color: #cf5c62; }
+  .rank-B { color: #718bad; }
+  .rank-C { color: #8f88a8; }
+  .rank-fail { color: #b9b2c4; }
+  .r-title {
+    margin-bottom: 15px;
+    font-size: 15px; font-weight: 800; letter-spacing: .1em; color: #3a3350;
+  }
+  .r-rows {
+    display: grid; gap: 5px;
+    margin-bottom: 17px;
+    padding: 11px 13px;
+    border: 1.5px solid rgba(58,51,78,.2);
+    background: rgba(242,229,214,.6);
+  }
+  .r-rows div { display: flex; justify-content: space-between; font-size: 12px; }
+  .r-rows span { color: #746b82; }
+  .r-rows b {
+    font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    color: #3a3350;
+  }
+  .r-actions { display: grid; gap: 8px; }
+  .r-btn {
+    padding: 11px 14px;
+    border: 2px solid #3a334e; border-radius: 0;
+    font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .06em;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .r-again { color: #fffaf0; background: #cf5c62; box-shadow: 4px 4px 0 #3a334e; }
+  .r-close { color: #3a3350; background: #efe6d8; box-shadow: 4px 4px 0 rgba(58,51,78,.3); }
+  .r-btn:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #3a334e; }
+
   /* ---------- touch controls ---------- */
   .touch-ui { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
   .touch-ui.hidden { display: none; }
@@ -170,6 +288,18 @@
     right: calc(16px + env(safe-area-inset-right, 0px));
     top: calc(14px + env(safe-area-inset-top, 0px));
     width: 42px; height: 42px; font-size: 16px;
+  }
+  .tbtn-errand {
+    right: calc(66px + env(safe-area-inset-right, 0px));
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    width: 42px; height: 42px; font-size: 17px;
+  }
+
+  /* the objective panel has to clear both top-right buttons on a phone */
+  body.touch-mode .mission {
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    top: calc(62px + env(safe-area-inset-top, 0px));
+    min-width: 0; max-width: calc(100vw - 24px);
   }
 
   /* ---------- title / pause screen ---------- */
@@ -540,7 +670,7 @@
     .overlay, .menu-action { transition: none; }
   }
 </style>
-  <script type="module" crossorigin src="./assets/index-B1FLH7GP.js"></script>
+  <script type="module" crossorigin src="./assets/index-CTkavQrO.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
