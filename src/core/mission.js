@@ -5,7 +5,7 @@ import { wrapDelta } from '../world/planet.js';
  *
  * The world had no goal in it: you walked, and walking was the whole of it.
  * This is a five-to-ten minute loop laid over the top of that without taking
- * anything away -- a memo with six places on it, a clock, and a rank at the
+ * anything away -- a memo with eight places on it, a clock, and a rank at the
  * end.  Press Q (or the 📋 button) and it starts; press it again and it is
  * gone and you are just walking again.
  *
@@ -13,66 +13,78 @@ import { wrapDelta } from '../world/planet.js';
  * no-people rule is the hardest constraint this project has, and an errand is
  * exactly the kind of feature that breaks it -- a quest giver, a shopkeeper, a
  * mother at a door.  So the framing is a *list*: おつかいメモ, found in a
- * pocket, six stops on it in somebody's handwriting.  The town stays empty and
+ * pocket, eight stops on it in somebody's handwriting.  The town stays empty and
  * the narrative is still carried by the objects, which is what `README.md`
  * says it is for.
  *
- * Every coordinate in `STOPS` is lifted from the verified camera table in
- * `CLAUDE.md`.  That matters more than it looks: those are positions somebody
- * has actually stood at and rendered from, checked against `world.colliders`,
- * so none of them is inside a shop, a vending machine or a parked van -- which
- * is the failure mode for any spot picked off a plan (see the trap table).
- * Do not add a stop here with a coordinate you have not walked to.
+ * **Every coordinate here is flood-fill verified, and the first set was not.**
+ *
+ * They started as the camera positions from `CLAUDE.md`'s shot table, on the
+ * reasoning that somebody had stood at each one and rendered it.  That proves
+ * a spot is not *inside* a collider.  It does not prove you can walk to it,
+ * and it does not prove you can walk to it from the side you arrive on: the
+ * overbridge stop was `obpost`, which is a 2 m slot between the bridge's piers
+ * and the children's park railing.  Reported, correctly, as "the marker is in
+ * a park I can't get into".
+ *
+ * So each stop is now scored by how much walkable ground surrounds it -- the
+ * count of cells within 2.5 m that a BFS from the spawn actually reaches --
+ * and sits at the most open point within 12 m of its landmark.  The worst was
+ * the canal at 57 of a possible 158; the floor is 141 now.  **Reachable is not
+ * approachable**, and only the fill can tell you either.
+ *
+ * Adding a stop means re-running that fill.  A coordinate that merely renders
+ * nicely is exactly how this went wrong.
  * ------------------------------------------------------------------ */
 
 /**
  * The places an errand can send you.
  *
  * `zone` is what spreads a route over the map: one stop is taken from each of
- * six different zones, so a run cannot come out as six stops in the shopping
- * street.  It is the only thing keeping the route honest -- picking six at
+ * six different zones before the list is filled up, so a run cannot come out
+ * as eight stops in the shopping street.  It is the only thing keeping the route honest -- picking six at
  * random from a flat list clusters badly about a third of the time, because
  * the town's stops outnumber the outlying ones four to one.
  */
 export const STOPS = [
   // --- the middle of town ---
-  { id: 'crossing', zone: 'center', x: 1.85, z: 13.6, name: '桜踏切', sub: 'the level crossing' },
-  { id: 'ippuku', zone: 'center', x: 12.9, z: 9.6, name: 'さくら坂いっぷく処', sub: 'the vending corner' },
-  { id: 'shotengai', zone: 'center', x: 22.2, z: 20.0, name: 'さくら坂商店街', sub: 'the shopping street' },
-  { id: 'ichome', zone: 'center', x: -13.2, z: -6.9, name: 'ひばり台一丁目', sub: 'the lineside lane' },
+  { id: 'crossing', zone: 'center', x: 1.9, z: 13.6, name: '桜踏切', sub: 'the level crossing' },
+  { id: 'ippuku', zone: 'center', x: 14.4, z: 13.1, name: 'さくら坂いっぷく処', sub: 'the vending corner' },
+  { id: 'shotengai', zone: 'center', x: 22.2, z: 18, name: 'さくら坂商店街', sub: 'the shopping street' },
+  { id: 'ichome', zone: 'center', x: -14.7, z: -6.4, name: 'ひばり台一丁目', sub: 'the lineside lane' },
 
   // --- west: the shrine and the hot-spring shelf above it ---
-  { id: 'shrine', zone: 'west', x: -27.9, z: 28.0, name: '桜守神社 社殿', sub: 'the shrine hall' },
-  { id: 'matsuri', zone: 'west', x: -30.6, z: 18.4, name: '夏まつり準備中', sub: 'the festival ground' },
-  { id: 'onsen', zone: 'west', x: -20.4, z: 48.8, name: '湯の坂', sub: 'the onsen street' },
-  { id: 'ryokan', zone: 'west', x: -40.0, z: 48.4, name: '湯乃屋', sub: 'the ryokan court' },
+  { id: 'shrine', zone: 'west', x: -27.9, z: 29.5, name: '桜守神社 社殿', sub: 'the shrine hall' },
+  { id: 'matsuri', zone: 'west', x: -29.1, z: 16.9, name: '夏まつり準備中', sub: 'the festival ground' },
+  { id: 'onsen', zone: 'west', x: -21.9, z: 47.3, name: '湯の坂', sub: 'the onsen street' },
+  { id: 'ryokan', zone: 'west', x: -36.5, z: 48.9, name: '湯乃屋', sub: 'the ryokan court' },
 
   // --- south: the school and the streets that serve it ---
-  { id: 'schoolgate', zone: 'south', x: 12.6, z: -49.5, name: '県立ひばり台高等学校 昇降口', sub: 'the school entrance' },
+  { id: 'schoolgate', zone: 'south', x: 13.6, z: -49.5, name: '県立ひばり台高等学校 昇降口', sub: 'the school entrance' },
   { id: 'kobato', zone: 'south', x: 2.4, z: -29.5, name: 'こばと橋', sub: 'the road bridge' },
-  { id: 'gochome', zone: 'south', x: -21.8, z: -58.0, name: 'ひばり台五丁目', sub: 'the back lane' },
+  { id: 'gochome', zone: 'south', x: -21.3, z: -58, name: 'ひばり台五丁目', sub: 'the back lane' },
   { id: 'bungu', zone: 'south', x: 0.4, z: -58.6, name: '文具 ひばり堂', sub: 'the stationery shop' },
-  { id: 'kawabata', zone: 'south', x: 21.0, z: -32.2, name: '川端の道', sub: 'the lane by the water' },
-  { id: 'canal', zone: 'south', x: -34.0, z: -20.6, name: '用水路 ひばり橋', sub: 'the drainage channel' },
+  { id: 'kawabata', zone: 'south', x: 24.5, z: -33.2, name: '川端の道', sub: 'the lane by the water' },
+  { id: 'canal', zone: 'south', x: -30, z: -18.6, name: '用水路 ひばり橋', sub: 'the drainage channel' },
 
   // --- north: the library and the blocks behind it ---
   { id: 'library', zone: 'north', x: 13.4, z: 44.4, name: 'ひばり台図書館', sub: 'the branch library' },
-  { id: 'yonchome', zone: 'north', x: -3.4, z: 53.0, name: 'ひばり台四丁目', sub: "the main road's head" },
-  { id: 'uramachi', zone: 'north', x: -10.3, z: 51.6, name: '桜守裏町', sub: 'the oldest lane' },
-  { id: 'super', zone: 'north', x: -37.0, z: 92.4, name: 'スーパー さかえ', sub: 'the supermarket' },
+  { id: 'yonchome', zone: 'north', x: -2.9, z: 53.5, name: 'ひばり台四丁目', sub: "the main road's head" },
+  { id: 'uramachi', zone: 'north', x: -9.3, z: 50.1, name: '桜守裏町', sub: 'the oldest lane' },
+  { id: 'super', zone: 'north', x: -37, z: 92.4, name: 'スーパー さかえ', sub: 'the supermarket' },
 
   // --- east: the park, the overbridge and the estate beyond ---
-  { id: 'park', zone: 'east', x: 33.0, z: 28.0, name: '児童公園', sub: "the children's park" },
-  { id: 'overbridge', zone: 'east', x: 41.0, z: 20.5, name: 'ひばり台こ線橋', sub: 'the overbridge' },
-  { id: 'nichome', zone: 'east', x: 49.2, z: 12.0, name: 'ひばり台二丁目', sub: 'the planned block' },
-  { id: 'rokuchome', zone: 'east', x: 65.4, z: 47.4, name: 'ひばり台六丁目 転回場', sub: 'the bus turnaround' },
+  { id: 'park', zone: 'east', x: 34.5, z: 27.5, name: '児童公園', sub: "the children's park" },
+  { id: 'overbridge', zone: 'east', x: 37.5, z: 24, name: 'ひばり台こ線橋', sub: 'the overbridge' },
+  { id: 'nichome', zone: 'east', x: 47.7, z: 15, name: 'ひばり台二丁目', sub: 'the planned block' },
+  { id: 'rokuchome', zone: 'east', x: 66.4, z: 48.9, name: 'ひばり台六丁目 転回場', sub: 'the bus turnaround' },
 
   /* --- the outlying two ---
    * These are what make a run take eight minutes rather than four, and they
    * are their own zone for exactly that reason: at most one of them is ever
    * on a memo.  Two would be a hike, not an errand. */
-  { id: 'tenbodai', zone: 'far', x: 35.8, z: -128.2, name: 'ひばり山 展望台', sub: 'the hill viewpoint' },
-  { id: 'sanbashi', zone: 'far', x: 166.0, z: -80.0, name: 'ひばり湖 見晴らし桟橋', sub: 'the lake pier' },
+  { id: 'tenbodai', zone: 'far', x: 34.8, z: -127.7, name: 'ひばり山 展望台', sub: 'the hill viewpoint' },
+  { id: 'sanbashi', zone: 'far', x: 166, z: -80, name: 'ひばり湖 見晴らし桟橋', sub: 'the lake pier' },
 ];
 
 /**
